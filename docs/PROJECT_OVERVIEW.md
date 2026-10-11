@@ -2,20 +2,21 @@
 
 ## Podsumowanie
 
-Repozytorium zawiera aplikację desktopową Tauri 2 z frontendem Leptos 0.8 i workspace Rust 2024. Obecny kod jest szkieletem startowym: frontend pokazuje przykładowy formularz powitania, a backend Tauri udostępnia komendę `greet`. Generator świata nie jest jeszcze zaimplementowany; logika domenowa ma trafić do skrzyni `worldgen/`.
+Repozytorium zawiera aplikację desktopową Tauri 2 z frontendem Leptos 0.8 i workspace Rust 2024. Iteracja 1 generatora: skrzynia `worldgen/` symuluje jedną wieś przez 10 lat; okno aplikacji pokazuje kronikę tekstową (komenda Tauri `generate_world_chronicle`). Droga do pełnej wersji 0.1: [ROADMAP_0.1.md](ROADMAP_0.1.md).
 
 ## Gdzie szukać
 
 | Obszar | Lokalizacja | Obecna rola |
 | --- | --- | --- |
-| Interfejs Leptos | `src/app.rs` | Główny komponent UI |
+| Interfejs Leptos | `src/app.rs` | Konsola kroniki w głównym oknie |
 | Wejście frontendu | `src/main.rs` | Montuje komponent aplikacji |
-| Komendy Tauri | `src-tauri/src/lib.rs` | Rejestruje komendy backendu |
+| Komendy Tauri | `src-tauri/src/lib.rs` | `generate_world_chronicle` → `worldgen` |
 | Wejście aplikacji Tauri | `src-tauri/src/main.rs` | Uruchamia bibliotekę Tauri |
 | Konfiguracja frontendu | `Cargo.toml`, `Trunk.toml`, `index.html`, `styles.css` | Zależności i budowanie frontendu |
 | Konfiguracja Tauri | `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` | Zależności i konfiguracja aplikacji desktopowej |
-| Skrzynia domeny generatora | `worldgen/` | Model świata i symulacja (do utworzenia przy pierwszej implementacji) |
+| Skrzynia domeny generatora | `worldgen/` | Model wsi, symulacja, kronika |
 | Plan domeny generatora | `generato.md` | Zakres, model i etapy generatora 0.1 |
+| Droga do v0.1 | `docs/ROADMAP_0.1.md` | Iteracje od wąskiego slice do pełnego 0.1 |
 | Globalne zasady dla agentów | `AGENTS.md` | Krótkie reguły pracy w repozytorium |
 | Agent implementujący | `.cursor/agents/worldgen-implementer.md` | Wykonywanie ograniczonych zadań generatora |
 | Agent przeglądu | `.cursor/agents/worldgen-reviewer.md` | Odczytowy przegląd zmian generatora |
@@ -32,7 +33,11 @@ Repozytorium zawiera aplikację desktopową Tauri 2 z frontendem Leptos 0.8 i wo
 
 ## Przydatne polecenia
 
+- `cargo tauri dev` — uruchomienie aplikacji (frontend: `trunk build` → `dist/`, bez `trunk serve` / portu 1420).
+- `powershell ./scripts/dev.ps1` — to samo przez skrypt.
 - `cargo fmt --all -- --check` — sprawdzenie formatowania Rust.
 - `cargo check --workspace` — sprawdzenie kompilacji workspace.
 - `cargo test --workspace` — uruchomienie testów workspace.
-- `trunk build` — budowanie frontendu; uruchamiaj przy zmianach frontendowych.
+- `trunk build` — ręczne budowanie frontendu do `dist/`.
+
+Nie otwieraj `http://127.0.0.1:1420` w przeglądarce — aplikacja działa w oknie Tauri.
