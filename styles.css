@@ -82,7 +82,7 @@ body {
   cursor: default;
 }
 
-.console-commands {
+.settlements-panel {
   text-align: left;
   padding: 0.75rem 1rem;
   border: 1px solid #3a3c30;
@@ -90,40 +90,56 @@ body {
   background: #1e2018;
 }
 
-.console-commands h2 {
-  margin: 0 0 0.5rem;
+.settlements-panel h2 {
+  margin: 0 0 0.35rem;
   font-size: 0.95rem;
   font-weight: 600;
   color: #b8b49a;
 }
 
-.console-commands ul {
+.settlements-hint {
+  margin: 0 0 0.75rem;
+  color: #8a8678;
+  font-size: 0.85rem;
+}
+
+.settlements-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem;
+}
+
+.settlement-card {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #3a3c30;
+  border-radius: 4px;
+  background: #12140f;
+}
+
+.settlement-card h3 {
+  margin: 0 0 0.45rem;
+  font-size: 1rem;
+  color: #e8e2d4;
+}
+
+.settlement-facts {
   margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
+  gap: 0.3rem;
+}
+
+.settlement-facts li {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
   gap: 0.4rem;
+  align-items: start;
 }
 
-.console-commands li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 0.75rem;
-  align-items: baseline;
-}
-
-.cmd-label {
+.fact-label {
   color: #8a8678;
-  min-width: 11rem;
-}
-
-.console-commands code {
-  color: #e8e2d4;
-  background: #12140f;
-  border: 1px solid #3a3c30;
-  border-radius: 3px;
-  padding: 0.15em 0.45em;
 }
 
 .console-output {

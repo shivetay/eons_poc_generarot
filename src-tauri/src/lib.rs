@@ -1,22 +1,25 @@
 use std::sync::Mutex;
 
 use tauri::State;
-use worldgen::{SimConfig, World, advance, generate, render};
+use worldgen::{GenerationView, SimConfig, World, advance, generate, generation_view};
 
 struct AppState {
     world: Mutex<Option<World>>,
 }
 
 #[tauri::command]
-fn generate_world_chronicle(state: State<'_, AppState>) -> String {
+fn generate_world_chronicle(state: State<'_, AppState>) -> GenerationView {
     let world = generate(SimConfig::default());
-    let text = render(&world);
+    let view = generation_view(&world);
     *state.world.lock().expect("app state") = Some(world);
-    text
+    view
 }
 
 #[tauri::command]
-fn continue_world_chronicle(state: State<'_, AppState>, years: u32) -> Result<String, String> {
+fn continue_world_chronicle(
+    state: State<'_, AppState>,
+    years: u32,
+) -> Result<GenerationView, String> {
     let mut guard = state
         .world
         .lock()
@@ -25,7 +28,7 @@ fn continue_world_chronicle(state: State<'_, AppState>, years: u32) -> Result<St
         .as_mut()
         .ok_or_else(|| "Brak wygenerowanego świata — najpierw wygeneruj kronikę.".to_string())?;
     advance(world, years);
-    Ok(render(world))
+    Ok(generation_view(world))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

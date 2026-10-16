@@ -15,7 +15,7 @@ bez mapy graficznej. Logika w skrzyni `worldgen/`, niezależna od UI.
 
 ## Iteracje
 
-### Iteracja 1 — jedna wieś, 10 lat, konsola w oknie (obecna)
+### Iteracja 1 — jedna wieś, 10 lat, konsola w oknie
 
 - Skrzynia `worldgen/`: model wsi, postaci, wydarzeń; pętla 10 lat.
 - 1–10 ważnych mieszkańców (losowo), proste wydarzenia (urodzaj, śmierć, sukcesja, konflikt, narodziny).
@@ -24,17 +24,34 @@ bez mapy graficznej. Logika w skrzyni `worldgen/`, niezależna od UI.
 
 **Kryterium ukończenia:** uruchomienie aplikacji pokazuje kronikę jednej wsi po 10 latach; przycisk generuje kolejną historię.
 
-### Iteracja 2 — odtwarzalność i bogatsze wydarzenia
+### Iteracja 1b — cztery osady
+
+- Dokładnie 4 wsie: populacja, wielkość, zajęcie, dzielnice, lista budynków.
+- Symulacja i +5 lat obejmują wszystkie osady; wydarzenia mają miejsce (wieś).
+- UI: sekcja „Osady” z faktami ze stanu świata; kronika opisuje wszystkie osady.
+
+**Kryterium ukończenia:** generacja pokazuje 4 karty osad + kronikę z wydarzeniami per wieś.
+
+### Iteracja 1c — życie NPC i system społeczny
+
+- NPC: praca, dom, potrzeby (żywność/schronienie/bezpieczeństwo), status społeczny.
+- Relacje: małżeństwo, rodzic–dziecko, sojusz, rywalizacja.
+- Migracja między osadami; sukcesja preferuje sojuszników.
+- Efekty życia widać **tylko jako wpisy w kronice** (bez osobnego UI NPC).
+
+**Kryterium ukończenia:** kronika zawiera pracę, niedostatek, migracje, małżeństwa i więzi.
+
+### Iteracja 2 — odtwarzalność i bogatsze wydarzenia (następna)
 
 - Jawne ziarno (opcjonalnie w UI), ten sam seed → ten sam wynik.
 - Więcej typów wydarzeń i silniejsze powiązanie przyczyn → skutków w stanie świata.
 - Testy determinizmu jako wymaganie, nie tylko pomocnicze.
 
-### Iteracja 3 — region i kilka osad
+### Iteracja 3 — region i sąsiedztwo
 
-- Region z biomem / cechami terenu (bez mapy).
-- Więcej niż jedna osada; proste sąsiedztwo lub odległość logiczna.
-- Wydarzenia mogą dotyczyć więcej niż jednej lokacji.
+- Region z biomem / cechami terenu (bez mapy) ponad istniejącymi 4 osadami.
+- Graf sąsiedztwa / odległość logiczna uzasadniająca migracje i konflikty.
+- Wydarzenia międzyosadowe wynikające z sąsiedztwa.
 
 ### Iteracja 4 — państwa, kultury, polityka
 
@@ -64,5 +81,8 @@ bez mapy graficznej. Logika w skrzyni `worldgen/`, niezależna od UI.
 
 | Iteracja | Status |
 | --- | --- |
-| 1 | zaimplementowana (oczekuje weryfikacji użytkownika) |
-| 2–6 | zaplanowane |
+| 1 | zaimplementowana |
+| 1b | zaimplementowana (4 osady) |
+| 1c | zaimplementowana (życie NPC / społeczeństwo w kronice) |
+| 2 | następna |
+| 3–6 | zaplanowane |

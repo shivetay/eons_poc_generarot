@@ -5,9 +5,18 @@ description: "Używaj przy projektowaniu, implementacji, testowaniu lub debugowa
 
 # Prace nad generatorem świata
 
-Używaj tej umiejętności do zadań związanych z generatorem opisanym w [planie](../../../generato.md). Zasady repozytorium i skrót architektury są w [AGENTS.md](../../../AGENTS.md) oraz [mapie projektu](../../../docs/PROJECT_OVERVIEW.md).
+Używaj tej umiejętności do zadań związanych z generatorem opisanym w [planie](../../../generato.md).
+Kolejność slice’ów: [docs/ROADMAP_0.1.md](../../../docs/ROADMAP_0.1.md).
+Zasady repozytorium i skrót architektury: [AGENTS.md](../../../AGENTS.md), [mapa projektu](../../../docs/PROJECT_OVERVIEW.md).
 
-## Założenia wersji 0.1
+## Bieżący slice (przed pełnym 0.1)
+
+- 4 osady; symulacja 10 lat + `advance` (+5 w UI); kronika z faktów.
+- NPC: praca, dom, potrzeby, status; relacje (rodzina, sojusz, rywalizacja); migracje.
+- Życie społeczne prezentuj jako **wpisy kroniki**, nie osobny panel UI NPC.
+- `tauri dev` używa `trunk build` → `dist/` (bez `trunk serve`).
+
+## Założenia wersji 0.1 (cel końcowy)
 
 - Świat fantasy w realiach średniowiecznych.
 - Wynik jest tekstowy; nie twórz mapy graficznej ani współrzędnych.

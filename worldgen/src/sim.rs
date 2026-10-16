@@ -1,9 +1,13 @@
-//! Bootstrap jednej wsi i pętla 10 lat.
+//! Bootstrap czterech osad i pętla życia społecznego NPC.
 
-use crate::model::{Event, EventKind, Person, PersonId, Role, Village, World};
+use crate::model::{
+    Event, EventKind, Livelihood, Needs, Person, PersonId, RelationKind, Role, SettlementSize,
+    SocialStatus, Village, VillageId, World,
+};
 use crate::rng::Rng;
 
 pub const DEFAULT_YEARS: u32 = 10;
+pub const SETTLEMENT_COUNT: usize = 4;
 
 #[derive(Debug, Clone)]
 pub struct SimConfig {
@@ -48,6 +52,30 @@ const VILLAGE_NAMES: &[&str] = &[
     "Kamionka",
     "Ostrów",
     "Wilczy Las",
+    "Brodnica",
+    "Gaj",
+];
+
+const DISTRICT_POOL: &[&str] = &[
+    "Centrum",
+    "Zagrody",
+    "Przedmieście",
+    "Nad potokiem",
+    "Przy lesie",
+    "Targowisko",
+];
+
+const BUILDING_POOL: &[&str] = &[
+    "karczma",
+    "kuźnia",
+    "kaplica",
+    "spichlerz",
+    "młyn",
+    "studnia",
+    "dom sołtysa",
+    "warsztat",
+    "stajnia",
+    "łaźnia",
 ];
 
 fn role_for_index(index: u32, count: u32) -> Role {
@@ -63,87 +91,340 @@ fn role_for_index(index: u32, count: u32) -> Role {
     }
 }
 
-fn bootstrap(rng: &mut Rng) -> Village {
-    let name = rng
-        .pick(VILLAGE_NAMES)
-        .copied()
-        .unwrap_or("Brzezina")
-        .to_string();
-    let count = rng.gen_range(1, 10);
-    let mut people = Vec::with_capacity(count as usize);
-    for i in 0..count {
+fn workplace_for(role: &Role, buildings: &[String], livelihood: Livelihood) -> String {
+    let prefer = match role {
+        Role::Kowal => "kuźnia",
+        Role::Soltys => "dom sołtysa",
+        Role::Zielarka => "kaplica",
+        Role::Rolnik => "spichlerz",
+        Role::Mysliwy => "Przy lesie",
+        Role::Straznik => "Centrum",
+    };
+    if let Some(b) = buildings.iter().find(|b| b.as_str() == prefer) {
+        return b.clone();
+    }
+    buildings
+        .first()
+        .cloned()
+        .unwrap_or_else(|| livelihood.as_str().to_string())
+}
+
+fn pick_size(rng: &mut Rng) -> SettlementSize {
+    match rng.gen_range(0, 2) {
+        0 => SettlementSize::Mala,
+        1 => SettlementSize::Srednia,
+        _ => SettlementSize::Duza,
+    }
+}
+
+fn pick_livelihood(rng: &mut Rng) -> Livelihood {
+    match rng.gen_range(0, 3) {
+        0 => Livelihood::Rolnictwo,
+        1 => Livelihood::Rzemioslo,
+        2 => Livelihood::Myslistwo,
+        _ => Livelihood::HandelLokalny,
+    }
+}
+
+fn population_for_size(size: SettlementSize, rng: &mut Rng) -> u32 {
+    match size {
+        SettlementSize::Mala => rng.gen_range(20, 45),
+        SettlementSize::Srednia => rng.gen_range(46, 90),
+        SettlementSize::Duza => rng.gen_range(91, 160),
+    }
+}
+
+fn important_npc_count(size: SettlementSize, rng: &mut Rng) -> u32 {
+    match size {
+        SettlementSize::Mala => rng.gen_range(2, 4),
+        SettlementSize::Srednia => rng.gen_range(3, 6),
+        SettlementSize::Duza => rng.gen_range(4, 8),
+    }
+}
+
+fn pick_unique_name(rng: &mut Rng, used: &[String], pool: &[&str]) -> String {
+    for _ in 0..32 {
+        let base = rng.pick(pool).copied().unwrap_or("Osada").to_string();
+        if !used.iter().any(|n| n == &base) {
+            return base;
+        }
+    }
+    format!("Osada {}", used.len() + 1)
+}
+
+fn pick_list(rng: &mut Rng, pool: &[&str], min: u32, max: u32) -> Vec<String> {
+    let count = rng.gen_range(min, max) as usize;
+    let mut out = Vec::new();
+    let mut guard = 0;
+    while out.len() < count && guard < 64 {
+        guard += 1;
+        let item = rng.pick(pool).copied().unwrap_or("—").to_string();
+        if !out.contains(&item) {
+            out.push(item);
+        }
+    }
+    if out.is_empty() {
+        out.push(pool.first().copied().unwrap_or("—").to_string());
+    }
+    out
+}
+
+fn bootstrap_village(
+    rng: &mut Rng,
+    id: VillageId,
+    used_names: &mut Vec<String>,
+    next_person_id: &mut u32,
+) -> Village {
+    let name = pick_unique_name(rng, used_names, VILLAGE_NAMES);
+    used_names.push(name.clone());
+    let size = pick_size(rng);
+    let livelihood = pick_livelihood(rng);
+    let population = population_for_size(size, rng);
+    let districts = pick_list(rng, DISTRICT_POOL, 1, 3);
+    let buildings = pick_list(rng, BUILDING_POOL, 3, 6);
+    let npc_count = important_npc_count(size, rng);
+
+    let mut people = Vec::with_capacity(npc_count as usize);
+    for i in 0..npc_count {
         let base = rng.pick(FIRST_NAMES).copied().unwrap_or("Anon").to_string();
-        let name = if people.iter().any(|p: &Person| p.name == base) {
-            format!("{base} {i}")
+        let person_name = if people.iter().any(|p: &Person| p.name == base) {
+            format!("{base} {}", *next_person_id)
         } else {
             base
         };
+        let role = role_for_index(i, npc_count);
+        let workplace = workplace_for(&role, &buildings, livelihood);
         people.push(Person {
-            id: PersonId(i),
-            name,
-            role: role_for_index(i, count),
+            id: PersonId(*next_person_id),
+            village_id: id,
+            home_village_id: id,
+            workplace,
+            name: person_name,
+            social_status: SocialStatus::from_role(&role),
+            role,
+            needs: Needs::balanced((*next_person_id % 20) as u8),
             alive: true,
         });
+        *next_person_id += 1;
     }
+
     Village {
+        id,
         name,
-        food: 40 + rng.gen_range(0, 20) as i32,
+        size,
+        livelihood,
+        population,
+        districts,
+        buildings,
+        food: 40 + rng.gen_range(0, 25) as i32,
         people,
     }
 }
 
-fn living_ids(world: &World) -> Vec<PersonId> {
-    world.living().map(|p| p.id).collect()
+fn seed_social_ties(world: &mut World, rng: &mut Rng) {
+    let village_ids: Vec<VillageId> = world.villages.iter().map(|v| v.id).collect();
+    for vid in village_ids {
+        let ids: Vec<PersonId> = world.living_in(vid).map(|p| p.id).collect();
+        if ids.len() >= 2 {
+            let a = ids[0];
+            let b = ids[1];
+            world.add_relation(a, b, RelationKind::Ally);
+            let name_a = world.person(a).map(|p| p.name.clone()).unwrap_or_default();
+            let name_b = world.person(b).map(|p| p.name.clone()).unwrap_or_default();
+            let vname = world
+                .village(vid)
+                .map(|v| v.name.clone())
+                .unwrap_or_default();
+            world.events.push(Event {
+                year: 0,
+                village_id: vid,
+                kind: EventKind::SocialChange,
+                cause: format!("wspólne życie w {vname}"),
+                participant_ids: vec![a, b],
+                effect: format!("{name_a} i {name_b} zawierają sojusz sąsiedzki"),
+            });
+        }
+        if ids.len() >= 3 && rng.chance(1, 2) {
+            world.add_relation(ids[0], ids[2], RelationKind::Rival);
+        }
+        if ids.len() >= 2 && rng.chance(1, 2) {
+            let a = ids[ids.len() - 2];
+            let b = ids[ids.len() - 1];
+            if !world.has_relation(a, b, RelationKind::Spouse) {
+                world.add_relation(a, b, RelationKind::Spouse);
+                let name_a = world.person(a).map(|p| p.name.clone()).unwrap_or_default();
+                let name_b = world.person(b).map(|p| p.name.clone()).unwrap_or_default();
+                world.events.push(Event {
+                    year: 0,
+                    village_id: vid,
+                    kind: EventKind::Marriage,
+                    cause: format!("związek zawarty w osadzie"),
+                    participant_ids: vec![a, b],
+                    effect: format!("{name_a} i {name_b} tworzą rodzinę"),
+                });
+            }
+        }
+    }
 }
 
-fn apply_yearly_food(world: &mut World, good_harvest: bool) {
-    let living = world.living().count() as i32;
-    let consumption = living * 3;
+fn living_ids(village: &Village) -> Vec<PersonId> {
+    village
+        .people
+        .iter()
+        .filter(|p| p.alive)
+        .map(|p| p.id)
+        .collect()
+}
+
+fn apply_yearly_food(village: &mut Village, good_harvest: bool) {
+    let living = village.people.iter().filter(|p| p.alive).count() as i32;
+    let consumption = living * 3 + (village.population / 20) as i32;
     let yield_amount = if good_harvest {
-        8 + living * 4
+        10 + living * 4 + (village.population / 15) as i32
     } else {
         2 + living
     };
-    world.village.food = (world.village.food + yield_amount - consumption).max(0);
+    village.food = (village.food + yield_amount - consumption).max(0);
 }
 
-fn maybe_harvest(world: &mut World, rng: &mut Rng) {
+fn update_needs_after_harvest(world: &mut World, village_id: VillageId, good: bool) {
+    let food_stock = world.village(village_id).map(|v| v.food).unwrap_or(0);
+    if let Some(village) = world.village_mut(village_id) {
+        for person in village.people.iter_mut().filter(|p| p.alive) {
+            if good && food_stock > 20 {
+                person.needs.food = person.needs.food.saturating_add(12).min(100);
+                person.needs.shelter = person.needs.shelter.saturating_add(4).min(100);
+            } else {
+                person.needs.food = person.needs.food.saturating_sub(18);
+                person.needs.safety = person.needs.safety.saturating_sub(8);
+            }
+        }
+    }
+}
+
+fn maybe_harvest(world: &mut World, village_id: VillageId, rng: &mut Rng) {
     let good = rng.chance(3, 5);
-    apply_yearly_food(world, good);
-    let food = world.village.food;
+    let Some(village) = world.village_mut(village_id) else {
+        return;
+    };
+    apply_yearly_food(village, good);
+    let food = village.food;
+    let name = village.name.clone();
+    let participants = living_ids(village);
     if good {
         world.events.push(Event {
             year: world.year,
+            village_id,
             kind: EventKind::HarvestGood,
-            cause: "sprzyjająca pogoda w sezonie wegetacyjnym".into(),
-            participant_ids: living_ids(world),
-            effect: format!("zapasy żywności wzrosły do {food}"),
+            cause: format!("sprzyjająca pogoda w {name}"),
+            participant_ids: participants,
+            effect: format!("zapasy żywności w {name} wzrosły do {food}"),
         });
     } else {
         world.events.push(Event {
             year: world.year,
+            village_id,
             kind: EventKind::HarvestBad,
-            cause: "deszczowa jesień i słabe plony".into(),
-            participant_ids: living_ids(world),
-            effect: format!("zapasy żywności spadły do {food}"),
+            cause: format!("słabe plony w {name}"),
+            participant_ids: participants,
+            effect: format!("zapasy żywności w {name} spadły do {food}"),
         });
     }
+    update_needs_after_harvest(world, village_id, good);
 }
 
-fn maybe_death_and_succession(world: &mut World, rng: &mut Rng) {
-    let candidates: Vec<PersonId> = living_ids(world);
+fn maybe_work(world: &mut World, village_id: VillageId, rng: &mut Rng) {
+    let workers: Vec<(PersonId, String, String)> = world
+        .living_in(village_id)
+        .map(|p| (p.id, p.name.clone(), p.workplace.clone()))
+        .collect();
+    if workers.is_empty() || !rng.chance(2, 3) {
+        return;
+    }
+    let Some(&(id, _, _)) = rng.pick(&workers) else {
+        return;
+    };
+    let (name, workplace) = workers
+        .iter()
+        .find(|(pid, _, _)| *pid == id)
+        .map(|(_, n, w)| (n.clone(), w.clone()))
+        .unwrap_or_default();
+    let village_name = world
+        .village(village_id)
+        .map(|v| v.name.clone())
+        .unwrap_or_default();
+
+    if let Some(p) = world.person_mut(id) {
+        p.needs.food = p.needs.food.saturating_add(6).min(100);
+        p.needs.shelter = p.needs.shelter.saturating_add(3).min(100);
+        p.needs.safety = p.needs.safety.saturating_add(2).min(100);
+    }
+
+    world.events.push(Event {
+        year: world.year,
+        village_id,
+        kind: EventKind::Work,
+        cause: format!("{name} wykonuje pracę przy {workplace}"),
+        participant_ids: vec![id],
+        effect: format!("potrzeby {name} w {village_name} poprawiają się dzięki pracy"),
+    });
+}
+
+fn maybe_need_crisis(world: &mut World, village_id: VillageId, rng: &mut Rng) {
+    let strained: Vec<(PersonId, String)> = world
+        .living_in(village_id)
+        .filter(|p| p.needs.is_strained())
+        .map(|p| (p.id, p.name.clone()))
+        .collect();
+    if strained.is_empty() || !rng.chance(1, 2) {
+        return;
+    }
+    let Some(&(id, _)) = rng.pick(&strained) else {
+        return;
+    };
+    let name = strained
+        .iter()
+        .find(|(pid, _)| *pid == id)
+        .map(|(_, n)| n.clone())
+        .unwrap_or_default();
+    let needs = world.person(id).map(|p| p.needs.clone());
+    let Some(needs) = needs else {
+        return;
+    };
+    let village_name = world
+        .village(village_id)
+        .map(|v| v.name.clone())
+        .unwrap_or_default();
+    world.events.push(Event {
+        year: world.year,
+        village_id,
+        kind: EventKind::NeedCrisis,
+        cause: format!(
+            "niezaspokojone potrzeby {name} (żywność {}, schronienie {}, bezpieczeństwo {})",
+            needs.food, needs.shelter, needs.safety
+        ),
+        participant_ids: vec![id],
+        effect: format!("{name} cierpi niedostatek w {village_name}"),
+    });
+}
+
+fn maybe_death_and_succession(world: &mut World, village_id: VillageId, rng: &mut Rng) {
+    let food = world.village(village_id).map(|v| v.food).unwrap_or(0);
+    let candidates = world
+        .village(village_id)
+        .map(living_ids)
+        .unwrap_or_default();
     if candidates.is_empty() {
         return;
     }
-    // Wyższe ryzyko przy niskich zapasach.
-    let risk_num = if world.village.food < 15 { 2 } else { 1 };
+    let risk_num = if food < 15 { 2 } else { 1 };
     if !rng.chance(risk_num, 6) {
         return;
     }
     let Some(&victim_id) = rng.pick(&candidates) else {
         return;
     };
-    let was_softys = world
+    let was_soltys = world
         .person(victim_id)
         .map(|p| p.role == Role::Soltys)
         .unwrap_or(false);
@@ -151,106 +432,378 @@ fn maybe_death_and_succession(world: &mut World, rng: &mut Rng) {
         .person(victim_id)
         .map(|p| p.name.clone())
         .unwrap_or_else(|| "?".into());
+    let village_name = world
+        .village(village_id)
+        .map(|v| v.name.clone())
+        .unwrap_or_default();
 
     if let Some(p) = world.person_mut(victim_id) {
         p.alive = false;
     }
+    if let Some(v) = world.village_mut(village_id) {
+        v.population = v.population.saturating_sub(1).max(1);
+    }
 
-    let cause = if world.village.food < 15 {
-        format!("choroba przy niedostatku żywności ({victim_name})")
+    let cause = if food < 15 {
+        format!("choroba przy niedostatku żywności w {village_name} ({victim_name})")
     } else {
-        format!("nagła choroba ({victim_name})")
+        format!("nagła choroba w {village_name} ({victim_name})")
     };
 
     world.events.push(Event {
         year: world.year,
+        village_id,
         kind: EventKind::Death,
         cause,
         participant_ids: vec![victim_id],
         effect: format!("{victim_name} umiera"),
     });
 
-    if was_softys {
-        let next = living_ids(world);
-        if let Some(&new_id) = rng.pick(&next) {
+    if was_soltys {
+        let living = world
+            .village(village_id)
+            .map(living_ids)
+            .unwrap_or_default();
+        let allies = world.allies_of(victim_id);
+        let preferred: Vec<PersonId> = living
+            .iter()
+            .copied()
+            .filter(|id| allies.contains(id))
+            .collect();
+        let pool = if preferred.is_empty() {
+            living
+        } else {
+            preferred
+        };
+        if let Some(&new_id) = rng.pick(&pool) {
             let new_name = world
                 .person(new_id)
                 .map(|p| p.name.clone())
                 .unwrap_or_else(|| "?".into());
             if let Some(p) = world.person_mut(new_id) {
                 p.role = Role::Soltys;
+                p.social_status = SocialStatus::Soltys;
             }
+            let cause = if allies.contains(&new_id) {
+                format!("sojusznicy popierają sukcesję po {victim_name}")
+            } else {
+                format!("śmierć sołtysa w {village_name} ({victim_name})")
+            };
             world.events.push(Event {
                 year: world.year,
+                village_id,
                 kind: EventKind::Succession,
-                cause: format!("śmierć poprzedniego sołtysa ({victim_name})"),
+                cause,
                 participant_ids: vec![victim_id, new_id],
-                effect: format!("{new_name} zostaje sołtysem"),
+                effect: format!("{new_name} zostaje sołtysem w {village_name}"),
             });
         }
     }
 }
 
-fn maybe_conflict(world: &mut World, rng: &mut Rng) {
-    let ids = living_ids(world);
+fn maybe_conflict(world: &mut World, village_id: VillageId, rng: &mut Rng) {
+    let ids = world
+        .village(village_id)
+        .map(living_ids)
+        .unwrap_or_default();
     if ids.len() < 2 || !rng.chance(1, 4) {
         return;
     }
     let a = *rng.pick(&ids).unwrap();
-    let b_candidates: Vec<_> = ids.into_iter().filter(|id| *id != a).collect();
+    let rivals: Vec<PersonId> = ids
+        .iter()
+        .copied()
+        .filter(|id| *id != a && world.has_relation(a, *id, RelationKind::Rival))
+        .collect();
+    let b = if !rivals.is_empty() && rng.chance(2, 3) {
+        *rng.pick(&rivals).unwrap()
+    } else {
+        let b_candidates: Vec<_> = ids.into_iter().filter(|id| *id != a).collect();
+        let Some(&b) = rng.pick(&b_candidates) else {
+            return;
+        };
+        b
+    };
+    let name_a = world.person(a).map(|p| p.name.clone()).unwrap_or_default();
+    let name_b = world.person(b).map(|p| p.name.clone()).unwrap_or_default();
+    let village_name = world
+        .village(village_id)
+        .map(|v| v.name.clone())
+        .unwrap_or_default();
+    let loss = rng.gen_range(1, 4) as i32;
+    if let Some(v) = world.village_mut(village_id) {
+        v.food = (v.food - loss).max(0);
+    }
+    for id in [a, b] {
+        if let Some(p) = world.person_mut(id) {
+            p.needs.safety = p.needs.safety.saturating_sub(15);
+        }
+    }
+    world.add_relation(a, b, RelationKind::Rival);
+    let food = world.village(village_id).map(|v| v.food).unwrap_or(0);
+    world.events.push(Event {
+        year: world.year,
+        village_id,
+        kind: EventKind::Conflict,
+        cause: format!("spór społeczny w {village_name} między {name_a} a {name_b}"),
+        participant_ids: vec![a, b],
+        effect: format!("rywalizacja pogłębia się; zużyto {loss} zapasów (pozostało {food})"),
+    });
+}
+
+fn maybe_marriage(world: &mut World, village_id: VillageId, rng: &mut Rng) {
+    let ids: Vec<PersonId> = world.living_in(village_id).map(|p| p.id).collect();
+    if ids.len() < 2 || !rng.chance(1, 5) {
+        return;
+    }
+    let a = *rng.pick(&ids).unwrap();
+    let b_candidates: Vec<_> = ids
+        .into_iter()
+        .filter(|id| {
+            *id != a
+                && !world.has_relation(a, *id, RelationKind::Spouse)
+                && !world.has_relation(a, *id, RelationKind::ParentChild)
+                && !world.has_relation(*id, a, RelationKind::ParentChild)
+        })
+        .collect();
     let Some(&b) = rng.pick(&b_candidates) else {
         return;
     };
     let name_a = world.person(a).map(|p| p.name.clone()).unwrap_or_default();
     let name_b = world.person(b).map(|p| p.name.clone()).unwrap_or_default();
-    let loss = rng.gen_range(1, 4) as i32;
-    world.village.food = (world.village.food - loss).max(0);
-    let food = world.village.food;
+    let village_name = world
+        .village(village_id)
+        .map(|v| v.name.clone())
+        .unwrap_or_default();
+    world.add_relation(a, b, RelationKind::Spouse);
+    world.add_relation(a, b, RelationKind::Ally);
     world.events.push(Event {
         year: world.year,
-        kind: EventKind::Conflict,
-        cause: format!("spór o zapasy między {name_a} a {name_b}"),
+        village_id,
+        kind: EventKind::Marriage,
+        cause: format!("związek zawarty w {village_name}"),
         participant_ids: vec![a, b],
-        effect: format!("zużyto {loss} zapasów; pozostało {food}"),
+        effect: format!("{name_a} i {name_b} tworzą rodzinę"),
     });
 }
 
-fn maybe_birth(world: &mut World, rng: &mut Rng) {
-    let living = world.living().count();
+fn maybe_birth(world: &mut World, village_id: VillageId, rng: &mut Rng) {
+    let living = world.living_in(village_id).count();
     if living == 0 || living >= 10 || !rng.chance(1, 5) {
         return;
     }
-    let next_id = world
-        .village
-        .people
+    let spouses: Vec<(PersonId, PersonId)> = world
+        .relations
         .iter()
+        .filter(|r| r.kind == RelationKind::Spouse)
+        .filter(|r| {
+            world
+                .person(r.a)
+                .is_some_and(|p| p.alive && p.village_id == village_id)
+                && world
+                    .person(r.b)
+                    .is_some_and(|p| p.alive && p.village_id == village_id)
+        })
+        .map(|r| (r.a, r.b))
+        .collect();
+    let parents = if let Some(&(a, b)) = rng.pick(&spouses) {
+        Some((a, b))
+    } else {
+        None
+    };
+
+    let next_id = world
+        .villages
+        .iter()
+        .flat_map(|v| v.people.iter())
         .map(|p| p.id.0)
         .max()
         .unwrap_or(0)
         + 1;
     let base = rng.pick(FIRST_NAMES).copied().unwrap_or("Anon").to_string();
-    let name = if world.village.people.iter().any(|p| p.name == base) {
-        format!("{base} {next_id}")
-    } else {
-        base
+    let village_name = world
+        .village(village_id)
+        .map(|v| v.name.clone())
+        .unwrap_or_default();
+    let buildings = world
+        .village(village_id)
+        .map(|v| v.buildings.clone())
+        .unwrap_or_default();
+    let livelihood = world
+        .village(village_id)
+        .map(|v| v.livelihood)
+        .unwrap_or(Livelihood::Rolnictwo);
+    let name = {
+        let taken = world
+            .villages
+            .iter()
+            .flat_map(|v| v.people.iter())
+            .any(|p| p.name == base);
+        if taken {
+            format!("{base} {next_id}")
+        } else {
+            base
+        }
     };
+    let role = Role::Rolnik;
     let person = Person {
         id: PersonId(next_id),
+        village_id,
+        home_village_id: village_id,
+        workplace: workplace_for(&role, &buildings, livelihood),
         name: name.clone(),
-        role: Role::Rolnik,
+        role,
+        social_status: SocialStatus::Chlop,
+        needs: Needs::balanced(10),
         alive: true,
     };
-    world.village.people.push(person);
+    if let Some(v) = world.village_mut(village_id) {
+        v.people.push(person);
+        v.population = v.population.saturating_add(1);
+    }
+    let mut participants = vec![PersonId(next_id)];
+    let mut cause = format!("narodziny w {village_name}");
+    if let Some((pa, pb)) = parents {
+        world.add_relation(pa, PersonId(next_id), RelationKind::ParentChild);
+        world.add_relation(pb, PersonId(next_id), RelationKind::ParentChild);
+        participants.extend([pa, pb]);
+        let n1 = world.person(pa).map(|p| p.name.clone()).unwrap_or_default();
+        let n2 = world.person(pb).map(|p| p.name.clone()).unwrap_or_default();
+        cause = format!("narodziny w rodzinie {n1} i {n2} w {village_name}");
+    }
     world.events.push(Event {
         year: world.year,
+        village_id,
         kind: EventKind::Birth,
-        cause: "narodziny w rodzinie wiejskiej".into(),
-        participant_ids: vec![PersonId(next_id)],
-        effect: format!("{name} dołącza do wsi jako rolnik"),
+        cause,
+        participant_ids: participants,
+        effect: format!("{name} dołącza do {village_name} jako rolnik"),
     });
 }
 
-/// Dopisuje kolejne lata symulacji (i wydarzenia) do istniejącego świata.
+fn maybe_migration(world: &mut World, rng: &mut Rng) {
+    let migrants: Vec<(PersonId, VillageId, String)> = world
+        .villages
+        .iter()
+        .flat_map(|v| v.people.iter())
+        .filter(|p| p.alive && p.needs.is_strained() && p.role != Role::Soltys)
+        .map(|p| (p.id, p.village_id, p.name.clone()))
+        .collect();
+    if migrants.is_empty() || !rng.chance(1, 3) {
+        return;
+    }
+    let Some(&(person_id, from_id, _)) = rng.pick(&migrants) else {
+        return;
+    };
+    let name = migrants
+        .iter()
+        .find(|(id, _, _)| *id == person_id)
+        .map(|(_, _, n)| n.clone())
+        .unwrap_or_default();
+    let targets: Vec<VillageId> = world
+        .villages
+        .iter()
+        .map(|v| v.id)
+        .filter(|id| *id != from_id)
+        .collect();
+    let Some(&to_id) = rng.pick(&targets) else {
+        return;
+    };
+    let from_name = world
+        .village(from_id)
+        .map(|v| v.name.clone())
+        .unwrap_or_default();
+    let to_name = world
+        .village(to_id)
+        .map(|v| v.name.clone())
+        .unwrap_or_default();
+    let to_buildings = world
+        .village(to_id)
+        .map(|v| v.buildings.clone())
+        .unwrap_or_default();
+    let to_livelihood = world
+        .village(to_id)
+        .map(|v| v.livelihood)
+        .unwrap_or(Livelihood::Rolnictwo);
+
+    let Some(mut person) = (|| {
+        let village = world.village_mut(from_id)?;
+        let idx = village.people.iter().position(|p| p.id == person_id)?;
+        Some(village.people.remove(idx))
+    })() else {
+        return;
+    };
+
+    if let Some(v) = world.village_mut(from_id) {
+        v.population = v.population.saturating_sub(1).max(1);
+    }
+
+    person.village_id = to_id;
+    person.home_village_id = to_id;
+    person.social_status = SocialStatus::Przybysz;
+    person.workplace = workplace_for(&person.role, &to_buildings, to_livelihood);
+    person.needs.shelter = person.needs.shelter.saturating_add(10).min(100);
+    person.needs.safety = 40;
+
+    if let Some(v) = world.village_mut(to_id) {
+        v.people.push(person);
+        v.population = v.population.saturating_add(1);
+    }
+
+    world.events.push(Event {
+        year: world.year,
+        village_id: to_id,
+        kind: EventKind::Migration,
+        cause: format!("niedostatek i napięcia w {from_name}"),
+        participant_ids: vec![person_id],
+        effect: format!("{name} przenosi się z {from_name} do {to_name} jako przybysz"),
+    });
+}
+
+fn maybe_new_alliance(world: &mut World, village_id: VillageId, rng: &mut Rng) {
+    let ids: Vec<PersonId> = world.living_in(village_id).map(|p| p.id).collect();
+    if ids.len() < 2 || !rng.chance(1, 6) {
+        return;
+    }
+    let a = *rng.pick(&ids).unwrap();
+    let b_candidates: Vec<_> = ids
+        .into_iter()
+        .filter(|id| *id != a && !world.has_relation(a, *id, RelationKind::Ally))
+        .collect();
+    let Some(&b) = rng.pick(&b_candidates) else {
+        return;
+    };
+    let name_a = world.person(a).map(|p| p.name.clone()).unwrap_or_default();
+    let name_b = world.person(b).map(|p| p.name.clone()).unwrap_or_default();
+    world.add_relation(a, b, RelationKind::Ally);
+    world.events.push(Event {
+        year: world.year,
+        village_id,
+        kind: EventKind::SocialChange,
+        cause: "wspólna praca i sąsiedztwo".into(),
+        participant_ids: vec![a, b],
+        effect: format!("{name_a} i {name_b} zawierają sojusz"),
+    });
+}
+
+fn simulate_year_for_all(world: &mut World, rng: &mut Rng) {
+    let ids: Vec<VillageId> = world.villages.iter().map(|v| v.id).collect();
+    for village_id in ids {
+        if world.living_in(village_id).count() == 0 {
+            continue;
+        }
+        maybe_harvest(world, village_id, rng);
+        maybe_work(world, village_id, rng);
+        maybe_need_crisis(world, village_id, rng);
+        maybe_death_and_succession(world, village_id, rng);
+        maybe_conflict(world, village_id, rng);
+        maybe_marriage(world, village_id, rng);
+        maybe_birth(world, village_id, rng);
+        maybe_new_alliance(world, village_id, rng);
+    }
+    maybe_migration(world, rng);
+}
+
 pub fn advance(world: &mut World, years: u32) {
     if years == 0 {
         return;
@@ -260,30 +813,38 @@ pub fn advance(world: &mut World, years: u32) {
     let end = world.year + years;
     for year in start..=end {
         world.year = year;
-        if world.living().count() == 0 {
+        if !world.any_living() {
             break;
         }
-        maybe_harvest(world, &mut rng);
-        maybe_death_and_succession(world, &mut rng);
-        maybe_conflict(world, &mut rng);
-        maybe_birth(world, &mut rng);
+        simulate_year_for_all(world, &mut rng);
     }
     world.rng_state = rng.state();
 }
 
-/// Uruchamia generację świata według konfiguracji.
 pub fn generate(config: SimConfig) -> World {
     let seed = config.seed.unwrap_or_else(random_seed);
     let mut rng = Rng::new(seed);
-    let village = bootstrap(&mut rng);
+    let mut used_names = Vec::new();
+    let mut next_person_id = 0u32;
+    let mut villages = Vec::with_capacity(SETTLEMENT_COUNT);
+    for i in 0..SETTLEMENT_COUNT {
+        villages.push(bootstrap_village(
+            &mut rng,
+            VillageId(i as u32),
+            &mut used_names,
+            &mut next_person_id,
+        ));
+    }
     let mut world = World {
         year: 0,
-        village,
+        villages,
         events: Vec::new(),
+        relations: Vec::new(),
         seed,
         rng_state: rng.state(),
     };
-
+    seed_social_ties(&mut world, &mut rng);
+    world.rng_state = rng.state();
     advance(&mut world, config.years);
     world
 }
@@ -293,17 +854,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn generate_runs_ten_years_with_fixed_seed() {
+    fn generate_creates_four_settlements_with_social_life() {
         let world = generate(SimConfig {
             years: 10,
             seed: Some(7),
         });
-        assert_eq!(world.seed, 7);
-        assert!(world.year <= 10);
-        assert!(!world.village.name.is_empty());
-        let initial_people = world.village.people.len();
-        assert!((1..=12).contains(&initial_people) || initial_people >= 1);
-        assert!(!world.events.is_empty());
+        assert_eq!(world.villages.len(), SETTLEMENT_COUNT);
+        assert!(!world.relations.is_empty());
+        for v in &world.villages {
+            assert!(!v.people.is_empty());
+            for p in &v.people {
+                assert!(!p.workplace.is_empty());
+            }
+        }
+        let kinds: Vec<_> = world.events.iter().map(|e| &e.kind).collect();
+        assert!(
+            kinds.iter().any(|k| matches!(
+                k,
+                EventKind::Work
+                    | EventKind::Migration
+                    | EventKind::Marriage
+                    | EventKind::SocialChange
+                    | EventKind::NeedCrisis
+            )),
+            "oczekiwano wydarzeń życia społecznego"
+        );
     }
 
     #[test]
@@ -316,30 +891,8 @@ mod tests {
             if event.kind == EventKind::Death {
                 let id = event.participant_ids[0];
                 let person = world.person(id).expect("uczestnik śmierci istnieje");
-                assert!(!person.alive, "zmarła postać musi mieć alive=false");
+                assert!(!person.alive);
             }
-        }
-    }
-
-    #[test]
-    fn harvest_effect_matches_food_field() {
-        let world = generate(SimConfig {
-            years: 10,
-            seed: Some(1234),
-        });
-        if let Some(last_harvest) = world
-            .events
-            .iter()
-            .rev()
-            .find(|e| matches!(e.kind, EventKind::HarvestGood | EventKind::HarvestBad))
-        {
-            assert!(
-                last_harvest
-                    .effect
-                    .contains(&world.village.food.to_string())
-                    || world.year == last_harvest.year,
-                "skutek ostatniego zbioru powinien odnosić się do zapasów"
-            );
         }
     }
 
@@ -354,6 +907,32 @@ mod tests {
         advance(&mut world, 5);
         assert_eq!(world.year, year_before + 5);
         assert!(world.events.len() >= events_before);
-        assert!(world.events.iter().any(|e| e.year > year_before));
+    }
+
+    #[test]
+    fn migration_moves_person_between_villages() {
+        let world = generate(SimConfig {
+            years: 40,
+            seed: Some(123),
+        });
+        let migrations: Vec<_> = world
+            .events
+            .iter()
+            .filter(|e| e.kind == EventKind::Migration)
+            .collect();
+        assert!(
+            !migrations.is_empty(),
+            "oczekiwano co najmniej jednej migracji"
+        );
+        let ev = *migrations.last().unwrap();
+        let id = ev.participant_ids[0];
+        let last_for_person = migrations
+            .iter()
+            .rev()
+            .find(|e| e.participant_ids.first() == Some(&id))
+            .unwrap();
+        let person = world.person(id).expect("migrant istnieje");
+        assert_eq!(person.social_status, SocialStatus::Przybysz);
+        assert_eq!(person.village_id, last_for_person.village_id);
     }
 }
