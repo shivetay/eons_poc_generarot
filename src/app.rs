@@ -17,6 +17,7 @@ struct ContinueArgs {
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 struct SettlementView {
     name: String,
+    state_name: String,
     population: u32,
     size: String,
     livelihood: String,
@@ -76,6 +77,10 @@ fn SettlementsPanel(settlements: Vec<SettlementView>) -> impl IntoView {
                                 <h3>{s.name.clone()}</h3>
                                 <ul class="settlement-facts">
                                     <li>
+                                        <span class="fact-label">"Państwo"</span>
+                                        <span>{s.state_name.clone()}</span>
+                                    </li>
+                                    <li>
                                         <span class="fact-label">"Populacja"</span>
                                         <span>{s.population}</span>
                                     </li>
@@ -121,7 +126,7 @@ pub fn App() -> impl IntoView {
         <main class="console-app">
             <header class="console-header">
                 <h1>"Kronika osad"</h1>
-                <p class="console-sub">"4 wsie — życie NPC i więzi w kronice"</p>
+                <p class="console-sub">"2 państwa × 2 osady — życie NPC w kronice"</p>
                 <div class="console-actions">
                     <button
                         type="button"

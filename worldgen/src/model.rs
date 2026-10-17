@@ -8,6 +8,9 @@ pub struct PersonId(pub u32);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct VillageId(pub u32);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+pub struct StateId(pub u32);
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum Role {
     Soltys,
@@ -158,6 +161,31 @@ pub struct Person {
     pub alive: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum Polity {
+    Ksiestwo,
+    Krolestwo,
+}
+
+impl Polity {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Polity::Ksiestwo => "księstwo",
+            Polity::Krolestwo => "królestwo",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct State {
+    pub id: StateId,
+    pub name: String,
+    pub polity: Polity,
+    pub capital_id: VillageId,
+    pub ruler_id: PersonId,
+    pub village_ids: Vec<VillageId>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum EventKind {
     HarvestGood,
@@ -171,6 +199,8 @@ pub enum EventKind {
     Migration,
     Marriage,
     SocialChange,
+    RulerSuccession,
+    InterstateTension,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -186,6 +216,7 @@ pub struct Event {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Village {
     pub id: VillageId,
+    pub state_id: StateId,
     pub name: String,
     pub size: SettlementSize,
     pub livelihood: Livelihood,
@@ -200,6 +231,7 @@ pub struct Village {
 pub struct World {
     pub year: u32,
     pub villages: Vec<Village>,
+    pub states: Vec<State>,
     pub events: Vec<Event>,
     pub relations: Vec<Relation>,
     pub seed: u64,
@@ -213,6 +245,19 @@ impl World {
 
     pub fn village_mut(&mut self, id: VillageId) -> Option<&mut Village> {
         self.villages.iter_mut().find(|v| v.id == id)
+    }
+
+    pub fn state(&self, id: StateId) -> Option<&State> {
+        self.states.iter().find(|s| s.id == id)
+    }
+
+    pub fn state_mut(&mut self, id: StateId) -> Option<&mut State> {
+        self.states.iter_mut().find(|s| s.id == id)
+    }
+
+    pub fn state_for_village(&self, village_id: VillageId) -> Option<&State> {
+        self.village(village_id)
+            .and_then(|v| self.state(v.state_id))
     }
 
     pub fn person(&self, id: PersonId) -> Option<&Person> {
@@ -283,13 +328,20 @@ impl World {
     pub fn settlement_views(&self) -> Vec<SettlementView> {
         self.villages
             .iter()
-            .map(|v| SettlementView {
-                name: v.name.clone(),
-                population: v.population,
-                size: v.size.as_str().to_string(),
-                livelihood: v.livelihood.as_str().to_string(),
-                districts: v.districts.clone(),
-                buildings: v.buildings.clone(),
+            .map(|v| {
+                let state_name = self
+                    .state(v.state_id)
+                    .map(|s| s.name.clone())
+                    .unwrap_or_else(|| "—".into());
+                SettlementView {
+                    name: v.name.clone(),
+                    state_name,
+                    population: v.population,
+                    size: v.size.as_str().to_string(),
+                    livelihood: v.livelihood.as_str().to_string(),
+                    districts: v.districts.clone(),
+                    buildings: v.buildings.clone(),
+                }
             })
             .collect()
     }
@@ -298,6 +350,7 @@ impl World {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SettlementView {
     pub name: String,
+    pub state_name: String,
     pub population: u32,
     pub size: String,
     pub livelihood: String,

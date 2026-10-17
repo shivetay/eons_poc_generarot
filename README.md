@@ -11,10 +11,10 @@ Mapa repo: [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md).
 
 ## Stan (branch `v1`)
 
-- **4 osady:** populacja, wielkość, zajęcie, dzielnice, budynki
+- **2 państwa × 2 osady:** ustrój, stolica, władca; osady z populacją, dzielnicami, budynkami
 - **Symulacja** 10 lat na start; przycisk **+5 lat** kontynuuje tę samą historię
 - **NPC:** praca, dom, potrzeby, status; relacje (rodzina, sojusz, rywalizacja); migracje
-- **UI:** karty osad + kronika (życie społeczne jako wpisy w kronice)
+- **UI:** karty osad (z państwem) + kronika (życie i polityka jako wpisy)
 - Frontend budowany przez `trunk build` do `dist/` (bez `trunk serve` / portu 1420)
 
 ## Uruchomienie

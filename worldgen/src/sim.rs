@@ -1,13 +1,14 @@
 //! Bootstrap czterech osad i pętla życia społecznego NPC.
 
 use crate::model::{
-    Event, EventKind, Livelihood, Needs, Person, PersonId, RelationKind, Role, SettlementSize,
-    SocialStatus, Village, VillageId, World,
+    Event, EventKind, Livelihood, Needs, Person, PersonId, Polity, RelationKind, Role,
+    SettlementSize, SocialStatus, State, StateId, Village, VillageId, World,
 };
 use crate::rng::Rng;
 
 pub const DEFAULT_YEARS: u32 = 10;
 pub const SETTLEMENT_COUNT: usize = 4;
+pub const STATE_COUNT: usize = 2;
 
 #[derive(Debug, Clone)]
 pub struct SimConfig {
@@ -76,6 +77,13 @@ const BUILDING_POOL: &[&str] = &[
     "warsztat",
     "stajnia",
     "łaźnia",
+];
+
+const STATE_NAMES: &[&str] = &[
+    "Księstwo Borów",
+    "Królestwo Nadbrzeża",
+    "Księstwo Kamienia",
+    "Królestwo Łąk",
 ];
 
 fn role_for_index(index: u32, count: u32) -> Role {
@@ -172,6 +180,7 @@ fn pick_list(rng: &mut Rng, pool: &[&str], min: u32, max: u32) -> Vec<String> {
 fn bootstrap_village(
     rng: &mut Rng,
     id: VillageId,
+    state_id: StateId,
     used_names: &mut Vec<String>,
     next_person_id: &mut u32,
 ) -> Village {
@@ -210,6 +219,7 @@ fn bootstrap_village(
 
     Village {
         id,
+        state_id,
         name,
         size,
         livelihood,
@@ -219,6 +229,67 @@ fn bootstrap_village(
         food: 40 + rng.gen_range(0, 25) as i32,
         people,
     }
+}
+
+fn pick_ruler(village: &Village) -> PersonId {
+    village
+        .people
+        .iter()
+        .find(|p| p.alive && p.role == Role::Soltys)
+        .or_else(|| village.people.iter().find(|p| p.alive))
+        .map(|p| p.id)
+        .unwrap_or(PersonId(0))
+}
+
+fn bootstrap_states(world: &mut World, rng: &mut Rng) {
+    let mut used_state_names = Vec::new();
+    let mut states = Vec::with_capacity(STATE_COUNT);
+    for i in 0..STATE_COUNT {
+        let state_id = StateId(i as u32);
+        let village_ids: Vec<VillageId> = world
+            .villages
+            .iter()
+            .filter(|v| v.state_id == state_id)
+            .map(|v| v.id)
+            .collect();
+        let capital_id = village_ids[0];
+        let capital_name = world
+            .village(capital_id)
+            .map(|v| v.name.clone())
+            .unwrap_or_default();
+        let ruler_id = world
+            .village(capital_id)
+            .map(pick_ruler)
+            .unwrap_or(PersonId(0));
+        let name = pick_unique_name(rng, &used_state_names, STATE_NAMES);
+        used_state_names.push(name.clone());
+        let polity = if i == 0 {
+            Polity::Ksiestwo
+        } else {
+            Polity::Krolestwo
+        };
+        states.push(State {
+            id: state_id,
+            name: name.clone(),
+            polity,
+            capital_id,
+            ruler_id,
+            village_ids: village_ids.clone(),
+        });
+        let ruler_name = world
+            .person(ruler_id)
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| "?".into());
+        world.events.push(Event {
+            year: 0,
+            village_id: capital_id,
+            kind: EventKind::SocialChange,
+            cause: format!("utworzenie {} {}", polity.as_str(), name),
+            participant_ids: vec![ruler_id],
+            effect: format!("{name} obejmuje osady; stolica {capital_name}, władca {ruler_name}"),
+        });
+    }
+    world.states = states;
 }
 
 fn seed_social_ties(world: &mut World, rng: &mut Rng) {
@@ -437,6 +508,8 @@ fn maybe_death_and_succession(world: &mut World, village_id: VillageId, rng: &mu
         .map(|v| v.name.clone())
         .unwrap_or_default();
 
+    let was_ruler = world.states.iter().any(|s| s.ruler_id == victim_id);
+
     if let Some(p) = world.person_mut(victim_id) {
         p.alive = false;
     }
@@ -458,6 +531,10 @@ fn maybe_death_and_succession(world: &mut World, village_id: VillageId, rng: &mu
         participant_ids: vec![victim_id],
         effect: format!("{victim_name} umiera"),
     });
+
+    if was_ruler {
+        succeed_state_ruler(world, victim_id, village_id, &victim_name, rng);
+    }
 
     if was_soltys {
         let living = world
@@ -760,6 +837,118 @@ fn maybe_migration(world: &mut World, rng: &mut Rng) {
     });
 }
 
+fn succeed_state_ruler(
+    world: &mut World,
+    dead_ruler: PersonId,
+    village_id: VillageId,
+    victim_name: &str,
+    rng: &mut Rng,
+) {
+    let Some(state_id) = world
+        .states
+        .iter()
+        .find(|s| s.ruler_id == dead_ruler)
+        .map(|s| s.id)
+    else {
+        return;
+    };
+    let capital_id = world
+        .state(state_id)
+        .map(|s| s.capital_id)
+        .unwrap_or(village_id);
+    let state_name = world
+        .state(state_id)
+        .map(|s| s.name.clone())
+        .unwrap_or_default();
+    let village_ids = world
+        .state(state_id)
+        .map(|s| s.village_ids.clone())
+        .unwrap_or_default();
+
+    let mut candidates: Vec<PersonId> = village_ids
+        .iter()
+        .flat_map(|vid| world.living_in(*vid).map(|p| p.id))
+        .collect();
+    let allies = world.allies_of(dead_ruler);
+    let preferred: Vec<PersonId> = candidates
+        .iter()
+        .copied()
+        .filter(|id| allies.contains(id))
+        .collect();
+    if !preferred.is_empty() {
+        candidates = preferred;
+    }
+    // Prefer living soltys in capital.
+    let capital_soltys: Vec<PersonId> = world
+        .living_in(capital_id)
+        .filter(|p| p.role == Role::Soltys)
+        .map(|p| p.id)
+        .collect();
+    let pool = if !capital_soltys.is_empty() {
+        capital_soltys
+    } else {
+        candidates
+    };
+    let Some(&new_id) = rng.pick(&pool) else {
+        return;
+    };
+    let new_name = world
+        .person(new_id)
+        .map(|p| p.name.clone())
+        .unwrap_or_else(|| "?".into());
+    if let Some(state) = world.state_mut(state_id) {
+        state.ruler_id = new_id;
+    }
+    world.events.push(Event {
+        year: world.year,
+        village_id: capital_id,
+        kind: EventKind::RulerSuccession,
+        cause: format!("śmierć władcy {victim_name} w {state_name}"),
+        participant_ids: vec![dead_ruler, new_id],
+        effect: format!("{new_name} obejmuje władzę w {state_name}"),
+    });
+}
+
+fn maybe_interstate_tension(world: &mut World, rng: &mut Rng) {
+    if world.states.len() < 2 || !rng.chance(1, 4) {
+        return;
+    }
+    let a = world.states[0].id;
+    let b = world.states[1].id;
+    let name_a = world.state(a).map(|s| s.name.clone()).unwrap_or_default();
+    let name_b = world.state(b).map(|s| s.name.clone()).unwrap_or_default();
+    let capital_a = world.state(a).map(|s| s.capital_id).unwrap_or(VillageId(0));
+    let ruler_a = world.state(a).map(|s| s.ruler_id);
+    let ruler_b = world.state(b).map(|s| s.ruler_id);
+    let mut participants = Vec::new();
+    if let Some(id) = ruler_a {
+        participants.push(id);
+    }
+    if let Some(id) = ruler_b {
+        participants.push(id);
+    }
+    let border_food_drop = rng.gen_range(1, 3) as i32;
+    // Tension drains a bit of food at both capitals (levy / unrest).
+    for capital in [
+        capital_a,
+        world.state(b).map(|s| s.capital_id).unwrap_or(VillageId(0)),
+    ] {
+        if let Some(v) = world.village_mut(capital) {
+            v.food = (v.food - border_food_drop).max(0);
+        }
+    }
+    world.events.push(Event {
+        year: world.year,
+        village_id: capital_a,
+        kind: EventKind::InterstateTension,
+        cause: format!("spór graniczny i pretensje między {name_a} a {name_b}"),
+        participant_ids: participants,
+        effect: format!(
+            "napięcie między państwami; stolice tracą po {border_food_drop} zapasów na zbrojenia"
+        ),
+    });
+}
+
 fn maybe_new_alliance(world: &mut World, village_id: VillageId, rng: &mut Rng) {
     let ids: Vec<PersonId> = world.living_in(village_id).map(|p| p.id).collect();
     if ids.len() < 2 || !rng.chance(1, 6) {
@@ -802,6 +991,7 @@ fn simulate_year_for_all(world: &mut World, rng: &mut Rng) {
         maybe_new_alliance(world, village_id, rng);
     }
     maybe_migration(world, rng);
+    maybe_interstate_tension(world, rng);
 }
 
 pub fn advance(world: &mut World, years: u32) {
@@ -827,10 +1017,13 @@ pub fn generate(config: SimConfig) -> World {
     let mut used_names = Vec::new();
     let mut next_person_id = 0u32;
     let mut villages = Vec::with_capacity(SETTLEMENT_COUNT);
+    // 2 państwa × 2 osady: wsie 0–1 → state 0, wsie 2–3 → state 1.
     for i in 0..SETTLEMENT_COUNT {
+        let state_id = StateId((i / 2) as u32);
         villages.push(bootstrap_village(
             &mut rng,
             VillageId(i as u32),
+            state_id,
             &mut used_names,
             &mut next_person_id,
         ));
@@ -838,11 +1031,13 @@ pub fn generate(config: SimConfig) -> World {
     let mut world = World {
         year: 0,
         villages,
+        states: Vec::new(),
         events: Vec::new(),
         relations: Vec::new(),
         seed,
         rng_state: rng.state(),
     };
+    bootstrap_states(&mut world, &mut rng);
     seed_social_ties(&mut world, &mut rng);
     world.rng_state = rng.state();
     advance(&mut world, config.years);
@@ -860,6 +1055,11 @@ mod tests {
             seed: Some(7),
         });
         assert_eq!(world.villages.len(), SETTLEMENT_COUNT);
+        assert_eq!(world.states.len(), STATE_COUNT);
+        for state in &world.states {
+            assert_eq!(state.village_ids.len(), 2);
+            assert!(world.person(state.ruler_id).is_some());
+        }
         assert!(!world.relations.is_empty());
         for v in &world.villages {
             assert!(!v.people.is_empty());
@@ -876,9 +1076,33 @@ mod tests {
                     | EventKind::Marriage
                     | EventKind::SocialChange
                     | EventKind::NeedCrisis
+                    | EventKind::InterstateTension
             )),
             "oczekiwano wydarzeń życia społecznego"
         );
+    }
+
+    #[test]
+    fn two_states_partition_villages() {
+        let world = generate(SimConfig {
+            years: 5,
+            seed: Some(21),
+        });
+        assert_eq!(world.states.len(), 2);
+        let owned: Vec<_> = world
+            .states
+            .iter()
+            .flat_map(|s| s.village_ids.iter())
+            .copied()
+            .collect();
+        assert_eq!(owned.len(), 4);
+        for v in &world.villages {
+            assert!(owned.contains(&v.id));
+            assert_eq!(
+                world.state_for_village(v.id).map(|s| s.id),
+                Some(v.state_id)
+            );
+        }
     }
 
     #[test]

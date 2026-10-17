@@ -3,9 +3,9 @@
 ## Podsumowanie
 
 Repozytorium zawiera aplikację desktopową Tauri 2 z frontendem Leptos 0.8 i workspace Rust 2024.
-Skrzynia `worldgen/` generuje **4 osady**, symuluje historię (domyślnie 10 lat, kontynuacja +5),
+Skrzynia `worldgen/` generuje **2 państwa** (po 2 osady), symuluje historię (domyślnie 10 lat, kontynuacja +5),
 z NPC (praca, potrzeby, status, rodziny, sojusze/rywalizacje, migracje). Okno aplikacji pokazuje
-karty osad i kronikę tekstową. Życie społeczne NPC widać jako **wpisy w kronice**.
+karty osad (z państwem) i kronikę. Życie społeczne i polityka widać jako **wpisy w kronice**.
 
 Droga do pełnej v0.1: [ROADMAP_0.1.md](ROADMAP_0.1.md). Plan domenowy: [generato.md](../generato.md).
 Ticket śledzący: [issue #10](https://github.com/shivetay/tauri_game_POC/issues/10)

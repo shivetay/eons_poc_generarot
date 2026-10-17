@@ -8,14 +8,47 @@ pub fn render(world: &World) -> String {
     out.push_str(&format!("Ziarno: {}\n", world.seed));
     out.push_str(&format!("Lata symulacji: {}\n", world.year));
     out.push_str(&format!("Liczba osad: {}\n", world.villages.len()));
+    out.push_str(&format!("Liczba państw: {}\n", world.states.len()));
     out.push_str(&format!("Relacje społeczne: {}\n", world.relations.len()));
     out.push('\n');
 
-    out.push_str("--- Osady (stan końcowy) ---\n");
-    for village in &world.villages {
+    out.push_str("--- Państwa ---\n");
+    for state in &world.states {
+        let ruler = world
+            .person(state.ruler_id)
+            .map(|p| p.name.as_str())
+            .unwrap_or("?");
+        let capital = world
+            .village(state.capital_id)
+            .map(|v| v.name.as_str())
+            .unwrap_or("?");
+        let villages = state
+            .village_ids
+            .iter()
+            .filter_map(|id| world.village(*id))
+            .map(|v| v.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
         out.push_str(&format!(
-            "\n{} — wielkość: {}, zajęcie: {}, populacja: {}, zapasy: {}\n",
+            "\n{} ({}) — stolica: {}, władca: {}\n  Osady: {}\n",
+            state.name,
+            state.polity.as_str(),
+            capital,
+            ruler,
+            villages
+        ));
+    }
+
+    out.push_str("\n--- Osady (stan końcowy) ---\n");
+    for village in &world.villages {
+        let state_name = world
+            .state(village.state_id)
+            .map(|s| s.name.as_str())
+            .unwrap_or("?");
+        out.push_str(&format!(
+            "\n{} [{}] — wielkość: {}, zajęcie: {}, populacja: {}, zapasy: {}\n",
             village.name,
+            state_name,
             village.size.as_str(),
             village.livelihood.as_str(),
             village.population,
@@ -89,7 +122,7 @@ pub fn render(world: &World) -> String {
             EventKind::HarvestGood => "Dobry urodzaj",
             EventKind::HarvestBad => "Słabe zbiory",
             EventKind::Death => "Śmierć",
-            EventKind::Succession => "Sukcesja",
+            EventKind::Succession => "Sukcesja sołtysa",
             EventKind::Conflict => "Konflikt",
             EventKind::Birth => "Narodziny",
             EventKind::Work => "Praca",
@@ -97,6 +130,8 @@ pub fn render(world: &World) -> String {
             EventKind::Migration => "Migracja",
             EventKind::Marriage => "Małżeństwo",
             EventKind::SocialChange => "Zmiana społeczna",
+            EventKind::RulerSuccession => "Sukcesja władcy",
+            EventKind::InterstateTension => "Napięcie międzypaństwowe",
         };
         let who = event
             .participant_ids
@@ -122,14 +157,17 @@ mod tests {
     use crate::sim::{SimConfig, generate};
 
     #[test]
-    fn chronicle_mentions_social_life() {
+    fn chronicle_mentions_states_and_villages() {
         let world = generate(SimConfig {
             years: 10,
             seed: Some(3),
         });
         let text = render(&world);
         assert!(text.contains("Kronika"));
-        assert!(text.contains("Więzi") || text.contains("Relacje"));
+        assert!(text.contains("Państwa"));
+        for s in &world.states {
+            assert!(text.contains(&s.name));
+        }
         for v in &world.villages {
             assert!(text.contains(&v.name));
         }

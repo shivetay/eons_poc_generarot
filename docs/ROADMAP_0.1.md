@@ -41,6 +41,14 @@ bez mapy graficznej. Logika w skrzyni `worldgen/`, niezależna od UI.
 
 **Kryterium ukończenia:** kronika zawiera pracę, niedostatek, migracje, małżeństwa i więzi.
 
+### Iteracja 1d — dwa państwa
+
+- Dokładnie 2 państwa (po 2 osady): nazwa, ustrój, stolica, władca.
+- UI: przynależność państwowa przy karcie osady; szczegóły w kronice.
+- Wydarzenia: sukcesja władcy, napięcie międzypaństwowe.
+
+**Kryterium ukończenia:** generacja ma 2 państwa; karty osad pokazują państwo; kronika opisuje władzę.
+
 ### Iteracja 2 — odtwarzalność i bogatsze wydarzenia (następna)
 
 - Jawne ziarno (opcjonalnie w UI), ten sam seed → ten sam wynik.
@@ -53,10 +61,9 @@ bez mapy graficznej. Logika w skrzyni `worldgen/`, niezależna od UI.
 - Graf sąsiedztwa / odległość logiczna uzasadniająca migracje i konflikty.
 - Wydarzenia międzyosadowe wynikające z sąsiedztwa.
 
-### Iteracja 4 — państwa, kultury, polityka
+### Iteracja 4 — kultury i bogatsza polityka
 
-- Państwo / władza ponad osadami, kultura niezależna od państwa.
-- Relacje między wspólnotami; podstawowe zmiany władzy lub praw.
+- Kultury niezależne od państwa; relacje dyplomatyczne; reformy / prawa.
 
 ### Iteracja 5 — postacie i relacje w pełniejszym zakresie
 
@@ -84,5 +91,6 @@ bez mapy graficznej. Logika w skrzyni `worldgen/`, niezależna od UI.
 | 1 | zaimplementowana |
 | 1b | zaimplementowana (4 osady) |
 | 1c | zaimplementowana (życie NPC / społeczeństwo w kronice) |
+| 1d | zaimplementowana (2 państwa) |
 | 2 | następna |
 | 3–6 | zaplanowane |
