@@ -14,7 +14,7 @@ serde-wasm-bindgen = "0.6"
 console_error_panic_hook = "0.1.7"
 
 [workspace]
-members = ["src-tauri"]
+members = ["src-tauri", "worldgen"]
 
 [profile.release]
 codegen-units = 1

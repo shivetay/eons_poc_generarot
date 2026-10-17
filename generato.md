@@ -1,5 +1,9 @@
 # Plan generatora świata — wersja 0.1
 
+> **Stan realizacji (slice, nie pełne 0.1):** iteracje 1 / 1b / 1c — 4 osady, kontynuacja +5 lat,
+> życie NPC i system społeczny w kronice. Szczegóły i kolejność: [docs/ROADMAP_0.1.md](docs/ROADMAP_0.1.md).
+> Ticket: [issue #10](https://github.com/shivetay/tauri_game_POC/issues/10). Kod: repo `eons_poc_generarot`, branch `v1`.
+
 ## Cel
 
 Stworzyć generator tekstowego świata fantasy osadzonego w realiach średniowiecznych. Generator tworzy świat, a następnie symuluje jego historię przez zadany okres — domyślnie 300 lat. Wersja 0.1 nie tworzy ani nie wyświetla mapy.
